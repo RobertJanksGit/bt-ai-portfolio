@@ -1,21 +1,37 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import Navbar from "../components/Navbar";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: Implement actual login logic here
-    console.log("Login attempt:", formData);
-    // For now, we'll just redirect to dashboard
-    navigate("/dashboard");
+    try {
+      setError("");
+      setLoading(true);
+      await login(formData.email, formData.password);
+      navigate("/dashboard");
+    } catch (error) {
+      setError(
+        error.code === "auth/wrong-password"
+          ? "Incorrect password"
+          : error.code === "auth/user-not-found"
+          ? "No account found with this email"
+          : "Failed to log in"
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (e) => {
@@ -38,6 +54,11 @@ const Login = () => {
             <h1 className="text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl dark:text-white">
               Sign in to your account
             </h1>
+            {error && (
+              <div className="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-700 dark:text-red-400">
+                {error}
+              </div>
+            )}
             <form className="space-y-4 md:space-y-6" onSubmit={handleSubmit}>
               <div>
                 <label
@@ -148,9 +169,10 @@ const Login = () => {
               </div>
               <button
                 type="submit"
-                className="w-full text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
+                disabled={loading}
+                className="w-full text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign in
+                {loading ? "Signing in..." : "Sign in"}
               </button>
               <p className="text-sm font-light text-gray-500 dark:text-gray-400">
                 Don&apos;t have an account yet?{" "}
