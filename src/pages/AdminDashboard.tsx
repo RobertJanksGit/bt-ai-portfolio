@@ -46,7 +46,7 @@ const AssetCard = ({
       setCurrentImageIndex((prevIndex) =>
         prevIndex === asset.imageUrls.length - 1 ? 0 : prevIndex + 1
       );
-    }, 3000); // Change image every 3 seconds
+    }, 5000); // Change image every 5 seconds
 
     return () => clearInterval(interval);
   }, [asset.imageUrls]);
