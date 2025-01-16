@@ -1,5 +1,5 @@
 import { useAuth } from "../contexts/AuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -19,6 +19,17 @@ const Landing = () => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const commentsEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (isModalOpen) {
+      scrollToBottom();
+    }
+  }, [comments, isModalOpen]);
 
   useEffect(() => {
     const fetchAssets = async () => {
@@ -187,8 +198,9 @@ const Landing = () => {
       {/* Comments Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+            {/* Fixed Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Comments for {selectedAsset?.title}
               </h2>
@@ -212,62 +224,76 @@ const Landing = () => {
               </button>
             </div>
 
-            {/* Comments List */}
-            <div className="space-y-4 mb-4">
-              {comments.map((comment) => (
-                <div
-                  key={comment.id}
-                  className={`p-4 rounded-lg ${
-                    comment.userId === userData.uid
-                      ? "bg-blue-50 dark:bg-blue-900/30 ml-8"
-                      : "bg-gray-50 dark:bg-gray-700/50 mr-8"
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className="font-semibold text-gray-900 dark:text-white">
-                        {comment.userName}
-                      </span>
-                      <span
-                        className={`ml-2 text-xs px-2 py-1 rounded ${
-                          comment.userRole === "admin"
-                            ? "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300"
-                            : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
-                        }`}
-                      >
-                        {comment.userRole}
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Comments List */}
+              <div className="space-y-4 mb-4">
+                {comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    className={`p-4 rounded-lg ${
+                      comment.userId === userData.uid
+                        ? "bg-blue-50 dark:bg-blue-900/30 ml-8"
+                        : "bg-gray-50 dark:bg-gray-700/50 mr-8"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <span className="font-semibold text-gray-900 dark:text-white">
+                          {comment.userName}
+                        </span>
+                        <span
+                          className={`ml-2 text-xs px-2 py-1 rounded ${
+                            comment.userRole === "admin"
+                              ? "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300"
+                              : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+                          }`}
+                        >
+                          {comment.userRole}
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {comment.createdAt?.toLocaleString()}
                       </span>
                     </div>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {comment.createdAt?.toLocaleString()}
-                    </span>
+                    <p className="text-gray-700 dark:text-gray-300">
+                      {comment.content}
+                    </p>
                   </div>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    {comment.content}
-                  </p>
-                </div>
-              ))}
+                ))}
+                <div ref={commentsEndRef} />
+              </div>
             </div>
 
-            {/* New Comment Form */}
-            <form onSubmit={handleSubmitComment} className="mt-4">
-              <textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Write your comment..."
-                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                rows="3"
-              />
-              <div className="flex justify-end mt-2">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                  disabled={!newComment.trim()}
-                >
-                  Send Comment
-                </button>
-              </div>
-            </form>
+            {/* Fixed Footer with Comment Form */}
+            <div className="border-t border-gray-200 dark:border-gray-700 p-6">
+              <form onSubmit={handleSubmitComment}>
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (newComment.trim()) {
+                        handleSubmitComment(e);
+                      }
+                    }
+                  }}
+                  placeholder="Write your comment... (Press Enter to send, Shift + Enter for new line)"
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  rows="3"
+                />
+                <div className="flex justify-end mt-2">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    disabled={!newComment.trim()}
+                  >
+                    Send Comment
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
