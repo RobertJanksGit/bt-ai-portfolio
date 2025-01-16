@@ -8,6 +8,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 import Navbar from "../components/Navbar";
@@ -64,7 +65,38 @@ const ProjectCard = ({ asset, userData, onCommentClick }) => {
     };
 
     checkUnreadMessages();
+
+    // Set up real-time listener for new messages
+    const commentsRef = collection(db, "comments");
+    let q;
+
+    if (userData.role === "admin") {
+      q = query(
+        commentsRef,
+        where("assetId", "==", asset.id),
+        where("userRole", "==", "user"),
+        where("isRead", "==", false)
+      );
+    } else {
+      q = query(
+        commentsRef,
+        where("assetId", "==", asset.id),
+        where("userRole", "==", "admin"),
+        where("isRead", "==", false)
+      );
+    }
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setHasUnreadMessages(!snapshot.empty);
+    });
+
+    return () => unsubscribe();
   }, [asset.id, userData]);
+
+  const handleCommentClick = async () => {
+    setHasUnreadMessages(false); // Reset notification when opening comments
+    onCommentClick(asset);
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-lg transition-transform hover:scale-105">
@@ -94,7 +126,7 @@ const ProjectCard = ({ asset, userData, onCommentClick }) => {
           {userData && (
             <div className="relative">
               <button
-                onClick={() => onCommentClick(asset)}
+                onClick={handleCommentClick}
                 className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
               >
                 <svg
