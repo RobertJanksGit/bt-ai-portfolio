@@ -24,7 +24,7 @@ interface Asset {
   title: string;
   description: string;
   url: string;
-  imageUrl: string;
+  imageUrls: string[];
   createdAt: Date;
 }
 
@@ -38,7 +38,8 @@ const AdminDashboard = () => {
     title: "",
     description: "",
     url: "",
-    image: null as File | null,
+    images: [] as File[],
+    existingImages: [] as string[],
   });
 
   useEffect(() => {
@@ -56,6 +57,7 @@ const AdminDashboard = () => {
         const assetList = assetSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
+          imageUrls: doc.data().imageUrls || [],
           createdAt: doc.data().createdAt?.toDate(),
         })) as Asset[];
         setAssets(assetList);
@@ -92,9 +94,12 @@ const AdminDashboard = () => {
         await deleteDoc(doc(db, "assets", asset.id));
 
         // Delete from Storage if there's an image
-        if (asset.imageUrl) {
-          const imageRef = ref(storage, asset.imageUrl);
-          await deleteObject(imageRef);
+        if (asset.imageUrls.length > 0) {
+          const deletePromises = asset.imageUrls.map(async (imageUrl) => {
+            const imageRef = ref(storage, imageUrl);
+            await deleteObject(imageRef);
+          });
+          await Promise.all(deletePromises);
         }
 
         // Update local state
@@ -115,47 +120,52 @@ const AdminDashboard = () => {
       editingAsset ? "Updating asset..." : "Creating asset..."
     );
     try {
-      let imageUrl = "";
-      if (assetForm.image) {
-        const imageRef = ref(storage, `assets/${assetForm.image.name}`);
-        const snapshot = await uploadBytes(imageRef, assetForm.image);
-        imageUrl = await getDownloadURL(snapshot.ref);
+      let imageUrls: string[] = [...(assetForm.existingImages || [])];
+
+      // Upload new images
+      if (assetForm.images.length > 0) {
+        const uploadPromises = assetForm.images.map(async (image) => {
+          const imageRef = ref(storage, `assets/${Date.now()}-${image.name}`);
+          const snapshot = await uploadBytes(imageRef, image);
+          return getDownloadURL(snapshot.ref);
+        });
+        const newImageUrls = await Promise.all(uploadPromises);
+        imageUrls = [...imageUrls, ...newImageUrls];
       }
+
+      const assetData = {
+        title: assetForm.title,
+        description: assetForm.description,
+        url: assetForm.url,
+        imageUrls,
+        updatedAt: new Date(),
+      };
 
       if (editingAsset) {
         // Update existing asset
         const assetRef = doc(db, "assets", editingAsset.id);
-        await updateDoc(assetRef, {
-          title: assetForm.title,
-          description: assetForm.description,
-          url: assetForm.url,
-          ...(imageUrl && { imageUrl }),
-          updatedAt: new Date(),
-        });
+        await updateDoc(assetRef, assetData);
 
         setAssets(
           assets.map((asset) =>
             asset.id === editingAsset.id
-              ? { ...asset, ...assetForm, imageUrl: imageUrl || asset.imageUrl }
+              ? {
+                  ...asset,
+                  ...assetData,
+                }
               : asset
           )
         );
       } else {
         // Create new asset
         const docRef = await addDoc(collection(db, "assets"), {
-          title: assetForm.title,
-          description: assetForm.description,
-          url: assetForm.url,
-          imageUrl,
+          ...assetData,
           createdAt: new Date(),
         });
 
         const newAsset = {
           id: docRef.id,
-          title: assetForm.title,
-          description: assetForm.description,
-          url: assetForm.url,
-          imageUrl,
+          ...assetData,
           createdAt: new Date(),
         };
 
@@ -166,7 +176,8 @@ const AdminDashboard = () => {
         title: "",
         description: "",
         url: "",
-        image: null,
+        images: [],
+        existingImages: [],
       });
       setEditingAsset(null);
       setIsModalOpen(false);
@@ -176,7 +187,7 @@ const AdminDashboard = () => {
           : "Asset created successfully"
       );
     } catch (error) {
-      console.error("Error creating asset:", error);
+      console.error("Error saving asset:", error);
       toast.error("Failed to save asset. Please try again.");
     } finally {
       toast.dismiss(loadingToast);
@@ -189,9 +200,37 @@ const AdminDashboard = () => {
       title: asset.title,
       description: asset.description,
       url: asset.url,
-      image: null,
+      images: [],
+      existingImages: asset.imageUrls || [],
     });
     setIsModalOpen(true);
+  };
+
+  const handleDeleteImage = async (imageUrl: string, assetId: string) => {
+    try {
+      // Delete from Storage
+      const imageRef = ref(storage, imageUrl);
+      await deleteObject(imageRef);
+
+      // Update Firestore document
+      const assetRef = doc(db, "assets", assetId);
+      await updateDoc(assetRef, {
+        imageUrls: assetForm.existingImages.filter((url) => url !== imageUrl),
+      });
+
+      // Update form state
+      setAssetForm({
+        ...assetForm,
+        existingImages: assetForm.existingImages.filter(
+          (url) => url !== imageUrl
+        ),
+      });
+
+      toast.success("Image deleted successfully");
+    } catch (error) {
+      console.error("Error deleting image:", error);
+      toast.error("Failed to delete image");
+    }
   };
 
   const openCreateModal = () => {
@@ -200,14 +239,19 @@ const AdminDashboard = () => {
       title: "",
       description: "",
       url: "",
-      image: null,
+      images: [],
+      existingImages: [],
     });
     setIsModalOpen(true);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setAssetForm({ ...assetForm, image: e.target.files[0] });
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files);
+      setAssetForm((prev) => ({
+        ...prev,
+        images: [...prev.images, ...newFiles],
+      }));
     }
   };
 
@@ -239,7 +283,7 @@ const AdminDashboard = () => {
                   <div key={asset.id} className="relative group cursor-pointer">
                     <div className="aspect-square overflow-hidden rounded-lg">
                       <img
-                        src={asset.imageUrl}
+                        src={asset.imageUrls?.[0] || "/placeholder-image.jpg"}
                         alt={asset.title}
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                       />
@@ -346,7 +390,7 @@ const AdminDashboard = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      URL
+                      Project URL
                     </label>
                     <input
                       type="url"
@@ -360,15 +404,98 @@ const AdminDashboard = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Image
+                      Images
                     </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      required={!editingAsset}
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                    />
+                    {/* Existing Images */}
+                    {assetForm.existingImages.length > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                        {assetForm.existingImages.map((imageUrl, index) => (
+                          <div key={imageUrl} className="relative group">
+                            <img
+                              src={imageUrl}
+                              alt={`Image ${index + 1}`}
+                              className="w-full h-32 object-cover rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDeleteImage(
+                                  imageUrl,
+                                  editingAsset?.id || ""
+                                )
+                              }
+                              className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* New Images Input */}
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleFileChange}
+                        className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                      />
+                      {/* New Image Previews */}
+                      {assetForm.images.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                          {Array.from(assetForm.images).map((image, index) => (
+                            <div key={index} className="relative group">
+                              <img
+                                src={URL.createObjectURL(image)}
+                                alt={`Preview ${index + 1}`}
+                                className="w-full h-32 object-cover rounded-lg"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newImages = Array.from(
+                                    assetForm.images
+                                  );
+                                  newImages.splice(index, 1);
+                                  setAssetForm({
+                                    ...assetForm,
+                                    images: newImages,
+                                  });
+                                }}
+                                className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="flex justify-end space-x-2">
                     <button
