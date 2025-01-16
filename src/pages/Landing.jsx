@@ -257,68 +257,40 @@ const Landing = () => {
   const fetchComments = async (assetId) => {
     try {
       const commentsRef = collection(db, "comments");
-      let q;
 
       if (userData?.role === "admin" && selectedUser) {
         // Admin viewing specific user's conversation
-        q = query(
+        const q = query(
           commentsRef,
           where("assetId", "==", assetId),
-          where("userId", "in", [selectedUser.uid, userData.uid]),
+          where("userId", "in", [selectedUser.uid, "admin"]),
           orderBy("createdAt", "asc")
         );
+
         const commentSnapshot = await getDocs(q);
         const commentList = commentSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
           createdAt: doc.data().createdAt?.toDate(),
         }));
-
-        // Mark messages as read when admin views them
-        const batch = writeBatch(db);
-        commentSnapshot.docs.forEach((doc) => {
-          const comment = doc.data();
-          if (!comment.isRead && comment.userRole === "user") {
-            batch.update(doc.ref, { isRead: true });
-          }
-        });
-        await batch.commit();
 
         setComments(commentList);
       } else if (userData?.role === "user") {
-        // Regular user viewing their conversation with admin
-        q = query(
+        // Regular user viewing their conversation
+        const q = query(
           commentsRef,
           where("assetId", "==", assetId),
+          where("userId", "in", [userData.uid, "admin"]),
           orderBy("createdAt", "asc")
         );
 
-        const commentSnapshot = await getDocs(q);
-        const commentList = commentSnapshot.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate(),
-          }))
-          .filter(
-            (comment) =>
-              comment.userId === userData.uid || comment.userRole === "admin"
-          );
-
-        setComments(commentList);
-      } else {
-        // Default query if something goes wrong
-        q = query(
-          commentsRef,
-          where("assetId", "==", assetId),
-          orderBy("createdAt", "asc")
-        );
         const commentSnapshot = await getDocs(q);
         const commentList = commentSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
           createdAt: doc.data().createdAt?.toDate(),
         }));
+
         setComments(commentList);
       }
     } catch (error) {
@@ -328,9 +300,25 @@ const Landing = () => {
 
   const handleCommentClick = async (asset) => {
     setSelectedAsset(asset);
-    await fetchComments(asset.id);
     setIsModalOpen(true);
+
+    if (userData?.role === "admin") {
+      // For admin, wait for user selection before fetching comments
+      if (selectedUser) {
+        await fetchComments(asset.id);
+      }
+    } else {
+      // For regular users, fetch comments immediately
+      await fetchComments(asset.id);
+    }
   };
+
+  // Add effect to fetch comments when selectedUser changes for admin
+  useEffect(() => {
+    if (userData?.role === "admin" && selectedUser && selectedAsset) {
+      fetchComments(selectedAsset.id);
+    }
+  }, [selectedUser, selectedAsset]);
 
   const handleSubmitComment = async (e) => {
     e.preventDefault();
@@ -339,11 +327,13 @@ const Landing = () => {
     try {
       const commentData = {
         assetId: selectedAsset.id,
-        userId: userData.uid,
+        userId: userData.role === "admin" ? "admin" : userData.uid,
         userName: userData.name || userData.email,
         userRole: userData.role,
         content: newComment,
         createdAt: serverTimestamp(),
+        isRead: false,
+        recipientId: userData.role === "admin" ? selectedUser.uid : "admin",
       };
 
       await addDoc(collection(db, "comments"), commentData);
