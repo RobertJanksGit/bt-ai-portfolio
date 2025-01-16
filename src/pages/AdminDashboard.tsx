@@ -28,6 +28,77 @@ interface Asset {
   createdAt: Date;
 }
 
+const AssetCard = ({
+  asset,
+  onEdit,
+  onDelete,
+}: {
+  asset: Asset;
+  onEdit: () => void;
+  onDelete: () => void;
+}) => {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (!asset.imageUrls?.length) return;
+
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prevIndex) =>
+        prevIndex === asset.imageUrls.length - 1 ? 0 : prevIndex + 1
+      );
+    }, 3000); // Change image every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [asset.imageUrls]);
+
+  return (
+    <div className="relative group cursor-pointer">
+      <div className="aspect-square overflow-hidden rounded-lg">
+        <img
+          src={asset.imageUrls?.[currentImageIndex] || "/placeholder-image.jpg"}
+          alt={asset.title}
+          className="w-full h-full object-cover transition-all duration-500"
+          style={{ opacity: 1 }}
+        />
+      </div>
+      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-75 transition-opacity duration-300 rounded-lg flex items-center justify-center">
+        <div className="opacity-0 group-hover:opacity-100 text-white p-4 text-center">
+          <h3 className="text-lg font-semibold mb-3">{asset.title}</h3>
+          <div className="flex flex-col space-y-2">
+            <a
+              href={asset.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              View Project
+            </a>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm text-white transition-colors duration-200"
+            >
+              Edit
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm text-white transition-colors duration-200"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AdminDashboard = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -280,51 +351,12 @@ const AdminDashboard = () => {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {assets.map((asset) => (
-                  <div key={asset.id} className="relative group cursor-pointer">
-                    <div className="aspect-square overflow-hidden rounded-lg">
-                      <img
-                        src={asset.imageUrls?.[0] || "/placeholder-image.jpg"}
-                        alt={asset.title}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                      />
-                    </div>
-                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-75 transition-opacity duration-300 rounded-lg flex items-center justify-center">
-                      <div className="opacity-0 group-hover:opacity-100 text-white p-4 text-center">
-                        <h3 className="text-lg font-semibold mb-3">
-                          {asset.title}
-                        </h3>
-                        <div className="flex flex-col space-y-2">
-                          <a
-                            href={asset.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors duration-200"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            View Project
-                          </a>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditAsset(asset);
-                            }}
-                            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm text-white transition-colors duration-200"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteAsset(asset);
-                            }}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm text-white transition-colors duration-200"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <AssetCard
+                    key={asset.id}
+                    asset={asset}
+                    onEdit={() => handleEditAsset(asset)}
+                    onDelete={() => handleDeleteAsset(asset)}
+                  />
                 ))}
               </div>
             </div>
