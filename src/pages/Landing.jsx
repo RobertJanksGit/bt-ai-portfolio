@@ -90,48 +90,34 @@ const Landing = () => {
           where("userId", "in", [selectedUser.uid, userData.uid]),
           orderBy("createdAt", "asc")
         );
+        const commentSnapshot = await getDocs(q);
+        const commentList = commentSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+        }));
+        setComments(commentList);
       } else if (userData?.role === "user") {
         // Regular user viewing their conversation with admin
         q = query(
           commentsRef,
           where("assetId", "==", assetId),
-          where("userId", "in", [userData.uid]),
           orderBy("createdAt", "asc")
         );
 
-        // Get admin comments in a separate query
-        const adminQuery = query(
-          commentsRef,
-          where("assetId", "==", assetId),
-          where("userRole", "==", "admin"),
-          orderBy("createdAt", "asc")
-        );
+        const commentSnapshot = await getDocs(q);
+        const commentList = commentSnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate(),
+          }))
+          .filter(
+            (comment) =>
+              comment.userId === userData.uid || comment.userRole === "admin"
+          );
 
-        // Fetch both user and admin comments
-        const [userSnapshot, adminSnapshot] = await Promise.all([
-          getDocs(q),
-          getDocs(adminQuery),
-        ]);
-
-        // Combine and sort all comments
-        const userComments = userSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate(),
-        }));
-
-        const adminComments = adminSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate(),
-        }));
-
-        const allComments = [...userComments, ...adminComments].sort(
-          (a, b) => a.createdAt - b.createdAt
-        );
-
-        setComments(allComments);
-        return;
+        setComments(commentList);
       } else {
         // Default query if something goes wrong
         q = query(
@@ -139,15 +125,14 @@ const Landing = () => {
           where("assetId", "==", assetId),
           orderBy("createdAt", "asc")
         );
+        const commentSnapshot = await getDocs(q);
+        const commentList = commentSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+        }));
+        setComments(commentList);
       }
-
-      const commentSnapshot = await getDocs(q);
-      const commentList = commentSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
-      }));
-      setComments(commentList);
     } catch (error) {
       console.error("Error fetching comments:", error);
     }
