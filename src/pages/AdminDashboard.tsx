@@ -1,14 +1,31 @@
 import React, { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
-import { collection, getDocs, addDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+} from "firebase/firestore";
 import { db, storage } from "../config/firebase";
 import { User } from "../types/user";
 import { updateUserRole } from "../services/userService";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
+interface Asset {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  imageUrl: string;
+  createdAt: Date;
+}
+
 const AdminDashboard = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [assetForm, setAssetForm] = useState({
     title: "",
     description: "",
@@ -17,20 +34,31 @@ const AdminDashboard = () => {
   });
 
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchData = async () => {
       try {
+        // Fetch users
         const usersCollection = collection(db, "users");
         const userSnapshot = await getDocs(usersCollection);
         const userList = userSnapshot.docs.map((doc) => doc.data() as User);
         setUsers(userList);
+
+        // Fetch assets
+        const assetsCollection = collection(db, "assets");
+        const assetSnapshot = await getDocs(assetsCollection);
+        const assetList = assetSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+        })) as Asset[];
+        setAssets(assetList);
       } catch (error) {
-        console.error("Error fetching users:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUsers();
+    fetchData();
   }, []);
 
   const handleRoleChange = async (uid: string, newRole: "user" | "admin") => {
@@ -56,13 +84,45 @@ const AdminDashboard = () => {
         imageUrl = await getDownloadURL(snapshot.ref);
       }
 
-      await addDoc(collection(db, "assets"), {
-        title: assetForm.title,
-        description: assetForm.description,
-        url: assetForm.url,
-        imageUrl,
-        createdAt: new Date(),
-      });
+      if (editingAsset) {
+        // Update existing asset
+        const assetRef = doc(db, "assets", editingAsset.id);
+        await updateDoc(assetRef, {
+          title: assetForm.title,
+          description: assetForm.description,
+          url: assetForm.url,
+          ...(imageUrl && { imageUrl }),
+          updatedAt: new Date(),
+        });
+
+        setAssets(
+          assets.map((asset) =>
+            asset.id === editingAsset.id
+              ? { ...asset, ...assetForm, imageUrl: imageUrl || asset.imageUrl }
+              : asset
+          )
+        );
+      } else {
+        // Create new asset
+        const docRef = await addDoc(collection(db, "assets"), {
+          title: assetForm.title,
+          description: assetForm.description,
+          url: assetForm.url,
+          imageUrl,
+          createdAt: new Date(),
+        });
+
+        const newAsset = {
+          id: docRef.id,
+          title: assetForm.title,
+          description: assetForm.description,
+          url: assetForm.url,
+          imageUrl,
+          createdAt: new Date(),
+        };
+
+        setAssets([...assets, newAsset]);
+      }
 
       setAssetForm({
         title: "",
@@ -70,12 +130,26 @@ const AdminDashboard = () => {
         url: "",
         image: null,
       });
-
-      alert("Asset created successfully!");
+      setEditingAsset(null);
+      alert(
+        editingAsset
+          ? "Asset updated successfully!"
+          : "Asset created successfully!"
+      );
     } catch (error) {
       console.error("Error creating asset:", error);
       alert("Error creating asset. Please try again.");
     }
+  };
+
+  const handleEditAsset = (asset: Asset) => {
+    setEditingAsset(asset);
+    setAssetForm({
+      title: asset.title,
+      description: asset.description,
+      url: asset.url,
+      image: null,
+    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,7 +170,7 @@ const AdminDashboard = () => {
           <div className="bg-white dark:bg-gray-800 relative shadow-md sm:rounded-lg overflow-hidden mb-6">
             <div className="p-4">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                Create New Asset
+                {editingAsset ? "Edit Asset" : "Create New Asset"}
               </h2>
               <form onSubmit={handleAssetSubmit} className="space-y-4">
                 <div>
@@ -160,9 +234,50 @@ const AdminDashboard = () => {
                   type="submit"
                   className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800"
                 >
-                  Create Asset
+                  {editingAsset ? "Update Asset" : "Create Asset"}
                 </button>
               </form>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 relative shadow-md sm:rounded-lg overflow-hidden mb-6">
+            <div className="p-4">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                Assets
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {assets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    className="relative group cursor-pointer"
+                    onClick={() => handleEditAsset(asset)}
+                  >
+                    <div className="aspect-square overflow-hidden rounded-lg">
+                      <img
+                        src={asset.imageUrl}
+                        alt={asset.title}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                      />
+                    </div>
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-75 transition-opacity duration-300 rounded-lg flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 text-white p-4 text-center">
+                        <h3 className="text-lg font-semibold mb-3">
+                          {asset.title}
+                        </h3>
+                        <a
+                          href={asset.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors duration-200"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          View Project
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
