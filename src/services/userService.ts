@@ -8,6 +8,7 @@ import {
 import { db } from "../config/firebase";
 import { User, UserRole } from "../types/user";
 import { uploadProfilePhoto } from "./storageService";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 export const createUserDocument = async (
   uid: string,
@@ -45,6 +46,11 @@ export const updateUserRole = async (
 ): Promise<void> => {
   const userRef = doc(db, "users", uid);
   await updateDoc(userRef, { role: newRole });
+
+  // Update custom claims through Cloud Function
+  const functions = getFunctions();
+  const setCustomClaims = httpsCallable(functions, "setUserRole");
+  await setCustomClaims({ uid, role: newRole });
 };
 
 export const updateLastLogin = async (uid: string): Promise<void> => {
