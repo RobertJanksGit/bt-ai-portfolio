@@ -9,6 +9,7 @@ import {
   orderBy,
   serverTimestamp,
   onSnapshot,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 import Navbar from "../components/Navbar";
@@ -94,7 +95,10 @@ const ProjectCard = ({ asset, userData, onCommentClick }) => {
   }, [asset.id, userData]);
 
   const handleCommentClick = async () => {
-    setHasUnreadMessages(false); // Reset notification when opening comments
+    // Only clear notification for regular users
+    if (userData.role !== "admin") {
+      setHasUnreadMessages(false);
+    }
     onCommentClick(asset);
   };
 
@@ -164,6 +168,7 @@ const Landing = () => {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const commentsEndRef = useRef(null);
+  const [usersWithUnread, setUsersWithUnread] = useState(new Set());
 
   // Fetch users for admin
   useEffect(() => {
@@ -186,6 +191,36 @@ const Landing = () => {
     };
     fetchUsers();
   }, [userData]);
+
+  useEffect(() => {
+    if (userData?.role !== "admin") return;
+
+    const checkUnreadMessages = async () => {
+      try {
+        const commentsRef = collection(db, "comments");
+        const q = query(
+          commentsRef,
+          where("userRole", "==", "user"),
+          where("isRead", "==", false)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const unreadUsers = new Set();
+          snapshot.docs.forEach((doc) => {
+            const comment = doc.data();
+            unreadUsers.add(comment.userId);
+          });
+          setUsersWithUnread(unreadUsers);
+        });
+
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error checking unread messages:", error);
+      }
+    };
+
+    checkUnreadMessages();
+  }, [userData?.role]);
 
   const scrollToBottom = () => {
     commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -238,6 +273,17 @@ const Landing = () => {
           ...doc.data(),
           createdAt: doc.data().createdAt?.toDate(),
         }));
+
+        // Mark messages as read when admin views them
+        const batch = writeBatch(db);
+        commentSnapshot.docs.forEach((doc) => {
+          const comment = doc.data();
+          if (!comment.isRead && comment.userRole === "user") {
+            batch.update(doc.ref, { isRead: true });
+          }
+        });
+        await batch.commit();
+
         setComments(commentList);
       } else if (userData?.role === "user") {
         // Regular user viewing their conversation with admin
@@ -378,8 +424,13 @@ const Landing = () => {
                         Select a user to view conversation
                       </option>
                       {users.map((user) => (
-                        <option key={user.uid} value={user.uid}>
+                        <option
+                          key={user.uid}
+                          value={user.uid}
+                          className="flex items-center justify-between"
+                        >
                           {user.name || user.email}
+                          {usersWithUnread.has(user.uid) && " 🔴"}
                         </option>
                       ))}
                     </select>
