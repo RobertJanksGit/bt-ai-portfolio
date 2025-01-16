@@ -253,6 +253,7 @@ const Landing = () => {
   const fetchComments = async (assetId) => {
     try {
       const commentsRef = collection(db, "comments");
+      const usersRef = collection(db, "users");
 
       if (userData?.role === "admin" && selectedUser) {
         // Admin viewing specific user's conversation
@@ -265,11 +266,29 @@ const Landing = () => {
         );
 
         const commentSnapshot = await getDocs(q);
-        const commentList = commentSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate(),
-        }));
+        const commentList = await Promise.all(
+          commentSnapshot.docs.map(async (doc) => {
+            const commentData = doc.data();
+            // Get user profile data
+            if (commentData.userId !== "admin") {
+              const userDoc = await getDocs(
+                query(usersRef, where("uid", "==", commentData.userId))
+              );
+              if (!userDoc.empty) {
+                const userData = userDoc.docs[0].data();
+                commentData.userPhotoURL = userData.photoURL;
+              }
+            } else {
+              // For admin messages, use the current admin's photo
+              commentData.userPhotoURL = userData.photoURL;
+            }
+            return {
+              id: doc.id,
+              ...commentData,
+              createdAt: commentData.createdAt?.toDate(),
+            };
+          })
+        );
 
         setComments(commentList);
       } else if (userData?.role === "user") {
@@ -283,11 +302,29 @@ const Landing = () => {
         );
 
         const commentSnapshot = await getDocs(q);
-        const commentList = commentSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate(),
-        }));
+        const commentList = await Promise.all(
+          commentSnapshot.docs.map(async (doc) => {
+            const commentData = doc.data();
+            // For admin messages, get admin profile
+            if (commentData.userId === "admin") {
+              const adminDoc = await getDocs(
+                query(usersRef, where("role", "==", "admin"))
+              );
+              if (!adminDoc.empty) {
+                const adminData = adminDoc.docs[0].data();
+                commentData.userPhotoURL = adminData.photoURL;
+              }
+            } else {
+              // For user's own messages
+              commentData.userPhotoURL = userData.photoURL;
+            }
+            return {
+              id: doc.id,
+              ...commentData,
+              createdAt: commentData.createdAt?.toDate(),
+            };
+          })
+        );
 
         setComments(commentList);
       }
@@ -517,25 +554,41 @@ const Landing = () => {
                       }`}
                     >
                       <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <span className="font-semibold text-gray-900 dark:text-white">
-                            {comment.userName}
-                          </span>
-                          <span
-                            className={`ml-2 text-xs px-2 py-1 rounded ${
-                              comment.userRole === "admin"
-                                ? "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300"
-                                : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
-                            }`}
-                          >
-                            {comment.userRole}
-                          </span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                            {comment.userPhotoURL ? (
+                              <img
+                                src={comment.userPhotoURL}
+                                alt={comment.userName}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                                {comment.userName?.charAt(0)?.toUpperCase() ||
+                                  "U"}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-900 dark:text-white">
+                              {comment.userName}
+                            </span>
+                            <span
+                              className={`ml-2 text-xs px-2 py-1 rounded ${
+                                comment.userRole === "admin"
+                                  ? "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300"
+                                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+                              }`}
+                            >
+                              {comment.userRole}
+                            </span>
+                          </div>
                         </div>
                         <span className="text-sm text-gray-500 dark:text-gray-400">
                           {comment.createdAt?.toLocaleString()}
                         </span>
                       </div>
-                      <p className="text-gray-700 dark:text-gray-300">
+                      <p className="text-gray-700 dark:text-gray-300 ml-10">
                         {comment.content}
                       </p>
                     </div>
