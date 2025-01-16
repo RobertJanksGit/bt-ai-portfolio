@@ -21,5 +21,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated() && isAdmin();
     }
+    
+    match /comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+    }
   }
 }

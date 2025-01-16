@@ -1,12 +1,24 @@
 import { useAuth } from "../contexts/AuthContext";
 import { useState, useEffect } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+} from "firebase/firestore";
 import { db } from "../config/firebase";
 import Navbar from "../components/Navbar";
 
 const Landing = () => {
   const { userData } = useAuth();
   const [assets, setAssets] = useState([]);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchAssets = async () => {
@@ -28,6 +40,62 @@ const Landing = () => {
 
   const scrollToProjects = () => {
     document.getElementById("projects").scrollIntoView({ behavior: "smooth" });
+  };
+
+  const fetchComments = async (assetId) => {
+    try {
+      const commentsRef = collection(db, "comments");
+      const q = query(
+        commentsRef,
+        where("assetId", "==", assetId),
+        orderBy("createdAt", "asc")
+      );
+      const commentSnapshot = await getDocs(q);
+      const commentList = commentSnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+        }))
+        // Filter comments to only show user's own comments and admin comments
+        .filter(
+          (comment) =>
+            comment.userId === userData.uid ||
+            userData.role === "admin" ||
+            (comment.userRole === "admin" && userData.role === "user")
+        );
+      setComments(commentList);
+    } catch (error) {
+      console.error("Error fetching comments:", error);
+    }
+  };
+
+  const handleCommentClick = async (asset) => {
+    setSelectedAsset(asset);
+    await fetchComments(asset.id);
+    setIsModalOpen(true);
+  };
+
+  const handleSubmitComment = async (e) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+
+    try {
+      const commentData = {
+        assetId: selectedAsset.id,
+        userId: userData.uid,
+        userName: userData.name || userData.email,
+        userRole: userData.role,
+        content: newComment,
+        createdAt: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, "comments"), commentData);
+      setNewComment("");
+      await fetchComments(selectedAsset.id);
+    } catch (error) {
+      console.error("Error adding comment:", error);
+    }
   };
 
   return (
@@ -76,23 +144,133 @@ const Landing = () => {
                   <p className="text-gray-600 dark:text-gray-300 mb-4">
                     {asset.description}
                   </p>
-                  {(userData?.role === "user" ||
-                    userData?.role === "admin") && (
-                    <a
-                      href={asset.visitUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    >
-                      Visit Project
-                    </a>
-                  )}
+                  <div className="flex justify-between items-center">
+                    {(userData?.role === "user" ||
+                      userData?.role === "admin") && (
+                      <a
+                        href={asset.visitUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      >
+                        Visit Project
+                      </a>
+                    )}
+                    {userData && (
+                      <button
+                        onClick={() => handleCommentClick(asset)}
+                        className="p-2 text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                        title="Leave a comment"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
       </main>
+
+      {/* Comments Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Comments for {selectedAsset?.title}
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            {/* Comments List */}
+            <div className="space-y-4 mb-4">
+              {comments.map((comment) => (
+                <div
+                  key={comment.id}
+                  className={`p-4 rounded-lg ${
+                    comment.userId === userData.uid
+                      ? "bg-blue-50 dark:bg-blue-900/30 ml-8"
+                      : "bg-gray-50 dark:bg-gray-700/50 mr-8"
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {comment.userName}
+                      </span>
+                      <span
+                        className={`ml-2 text-xs px-2 py-1 rounded ${
+                          comment.userRole === "admin"
+                            ? "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300"
+                            : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+                        }`}
+                      >
+                        {comment.userRole}
+                      </span>
+                    </div>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {comment.createdAt?.toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-gray-700 dark:text-gray-300">
+                    {comment.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* New Comment Form */}
+            <form onSubmit={handleSubmitComment} className="mt-4">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Write your comment..."
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                rows="3"
+              />
+              <div className="flex justify-end mt-2">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  disabled={!newComment.trim()}
+                >
+                  Send Comment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
