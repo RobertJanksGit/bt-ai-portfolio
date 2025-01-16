@@ -12,6 +12,7 @@ import {
   createUserDocument,
   getUserById,
   updateLastLogin,
+  updateProfile as updateUserProfile,
 } from "../services/userService";
 
 interface AuthContextType {
@@ -21,6 +22,7 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (updates: { name?: string; photoURL?: File }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,6 +70,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = () => signOut(auth);
 
+  const updateProfile = async (updates: { name?: string; photoURL?: File }) => {
+    if (!currentUser) throw new Error("No user logged in");
+    await updateUserProfile(currentUser.uid, updates);
+    const updatedUserData = await getUserById(currentUser.uid);
+    setUserData(updatedUserData);
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
@@ -90,6 +99,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     register,
     login,
     logout,
+    updateProfile,
   };
 
   return (

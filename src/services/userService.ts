@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 import { User, UserRole } from "../types/user";
+import { uploadProfilePhoto } from "./storageService";
 
 export const createUserDocument = async (
   uid: string,
@@ -56,4 +57,28 @@ export const updateLastLogin = async (uid: string): Promise<void> => {
 export const isUserAdmin = async (uid: string): Promise<boolean> => {
   const user = await getUserById(uid);
   return user?.role === "admin";
+};
+
+export const updateProfile = async (
+  uid: string,
+  updates: {
+    name?: string;
+    photoURL?: File;
+  }
+): Promise<void> => {
+  const userRef = doc(db, "users", uid);
+  const updateData: { [key: string]: any } = {};
+
+  if (updates.name) {
+    updateData.name = updates.name;
+  }
+
+  if (updates.photoURL) {
+    const photoURL = await uploadProfilePhoto(uid, updates.photoURL);
+    updateData.photoURL = photoURL;
+  }
+
+  if (Object.keys(updateData).length > 0) {
+    await updateDoc(userRef, updateData);
+  }
 };
