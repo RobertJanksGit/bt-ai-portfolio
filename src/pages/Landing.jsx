@@ -544,55 +544,78 @@ const Landing = () => {
                 </div>
               ) : (
                 <div className="space-y-4 mb-4">
-                  {comments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className={`p-4 rounded-lg ${
-                        comment.userId === userData.uid
-                          ? "bg-blue-50 dark:bg-blue-900/30 ml-8"
-                          : "bg-gray-50 dark:bg-gray-700/50 mr-8"
-                      }`}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                            {comment.userPhotoURL ? (
-                              <img
-                                src={comment.userPhotoURL}
-                                alt={comment.userName}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                                {comment.userName?.charAt(0)?.toUpperCase() ||
-                                  "U"}
-                              </span>
-                            )}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {comment.userName}
-                            </span>
-                            <span
-                              className={`ml-2 text-xs px-2 py-1 rounded ${
-                                comment.userRole === "admin"
-                                  ? "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300"
-                                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+                  {comments.map((comment) => {
+                    // Determine if this message should be on the right
+                    const isOwnMessage =
+                      (userData.role === "admin" &&
+                        comment.userId === "admin") ||
+                      (userData.role === "user" &&
+                        comment.userId === userData.uid);
+
+                    return (
+                      <div
+                        key={comment.id}
+                        className={`p-4 rounded-lg w-2/3 ${
+                          isOwnMessage
+                            ? "bg-blue-50 dark:bg-blue-900/30 ml-auto"
+                            : "bg-gray-50 dark:bg-gray-700/50"
+                        }`}
+                      >
+                        <div
+                          className={`flex justify-between items-start mb-2 ${
+                            isOwnMessage ? "flex-row-reverse" : ""
+                          }`}
+                        >
+                          <div
+                            className={`flex items-center gap-2 ${
+                              isOwnMessage ? "flex-row-reverse" : ""
+                            }`}
+                          >
+                            <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                              {comment.userPhotoURL ? (
+                                <img
+                                  src={comment.userPhotoURL}
+                                  alt={comment.userName}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                                  {comment.userName?.charAt(0)?.toUpperCase() ||
+                                    "U"}
+                                </span>
+                              )}
+                            </div>
+                            <div
+                              className={`flex items-center gap-2 ${
+                                isOwnMessage ? "flex-row-reverse" : ""
                               }`}
                             >
-                              {comment.userRole}
-                            </span>
+                              <span className="font-semibold text-gray-900 dark:text-white">
+                                {comment.userName}
+                              </span>
+                              <span
+                                className={`text-xs px-2 py-1 rounded ${
+                                  comment.userRole === "admin"
+                                    ? "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300"
+                                    : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+                                }`}
+                              >
+                                {comment.userRole}
+                              </span>
+                            </div>
                           </div>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {comment.createdAt?.toLocaleString()}
+                          </span>
                         </div>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          {comment.createdAt?.toLocaleString()}
-                        </span>
+                        <div className="flex justify-center">
+                          <p className="text-gray-700 dark:text-gray-300">
+                            {comment.content}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-gray-700 dark:text-gray-300 ml-10">
-                        {comment.content}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div ref={commentsEndRef} />
                 </div>
               )}
