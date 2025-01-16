@@ -6,11 +6,18 @@ import {
   addDoc,
   updateDoc,
   doc,
+  deleteDoc,
 } from "firebase/firestore";
 import { db, storage } from "../config/firebase";
 import { User } from "../types/user";
 import { updateUserRole } from "../services/userService";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
+import toast, { Toaster } from "react-hot-toast";
 
 interface Asset {
   id: string;
@@ -26,6 +33,7 @@ const AdminDashboard = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [assetForm, setAssetForm] = useState({
     title: "",
     description: "",
@@ -69,13 +77,43 @@ const AdminDashboard = () => {
           user.uid === uid ? { ...user, role: newRole } : user
         )
       );
+      toast.success("User role updated successfully");
     } catch (error) {
       console.error("Error updating user role:", error);
+      toast.error("Failed to update user role");
+    }
+  };
+
+  const handleDeleteAsset = async (asset: Asset) => {
+    if (window.confirm("Are you sure you want to delete this asset?")) {
+      const loadingToast = toast.loading("Deleting asset...");
+      try {
+        // Delete from Firestore
+        await deleteDoc(doc(db, "assets", asset.id));
+
+        // Delete from Storage if there's an image
+        if (asset.imageUrl) {
+          const imageRef = ref(storage, asset.imageUrl);
+          await deleteObject(imageRef);
+        }
+
+        // Update local state
+        setAssets(assets.filter((a) => a.id !== asset.id));
+        toast.success("Asset deleted successfully");
+      } catch (error) {
+        console.error("Error deleting asset:", error);
+        toast.error("Failed to delete asset");
+      } finally {
+        toast.dismiss(loadingToast);
+      }
     }
   };
 
   const handleAssetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const loadingToast = toast.loading(
+      editingAsset ? "Updating asset..." : "Creating asset..."
+    );
     try {
       let imageUrl = "";
       if (assetForm.image) {
@@ -131,14 +169,17 @@ const AdminDashboard = () => {
         image: null,
       });
       setEditingAsset(null);
-      alert(
+      setIsModalOpen(false);
+      toast.success(
         editingAsset
-          ? "Asset updated successfully!"
-          : "Asset created successfully!"
+          ? "Asset updated successfully"
+          : "Asset created successfully"
       );
     } catch (error) {
       console.error("Error creating asset:", error);
-      alert("Error creating asset. Please try again.");
+      toast.error("Failed to save asset. Please try again.");
+    } finally {
+      toast.dismiss(loadingToast);
     }
   };
 
@@ -150,6 +191,18 @@ const AdminDashboard = () => {
       url: asset.url,
       image: null,
     });
+    setIsModalOpen(true);
+  };
+
+  const openCreateModal = () => {
+    setEditingAsset(null);
+    setAssetForm({
+      title: "",
+      description: "",
+      url: "",
+      image: null,
+    });
+    setIsModalOpen(true);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,94 +217,26 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <Toaster position="top-right" />
       <Navbar />
       <div className="p-4">
         <div className="p-4 mt-14">
           <div className="bg-white dark:bg-gray-800 relative shadow-md sm:rounded-lg overflow-hidden mb-6">
             <div className="p-4">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                {editingAsset ? "Edit Asset" : "Create New Asset"}
-              </h2>
-              <form onSubmit={handleAssetSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Title
-                  </label>
-                  <input
-                    type="text"
-                    value={assetForm.title}
-                    onChange={(e) =>
-                      setAssetForm({ ...assetForm, title: e.target.value })
-                    }
-                    required
-                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={assetForm.description}
-                    onChange={(e) =>
-                      setAssetForm({
-                        ...assetForm,
-                        description: e.target.value,
-                      })
-                    }
-                    required
-                    rows={3}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    URL
-                  </label>
-                  <input
-                    type="url"
-                    value={assetForm.url}
-                    onChange={(e) =>
-                      setAssetForm({ ...assetForm, url: e.target.value })
-                    }
-                    required
-                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Image
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    required
-                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                  />
-                </div>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Assets
+                </h2>
                 <button
-                  type="submit"
+                  onClick={openCreateModal}
                   className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800"
                 >
-                  {editingAsset ? "Update Asset" : "Create Asset"}
+                  Create New Asset
                 </button>
-              </form>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 relative shadow-md sm:rounded-lg overflow-hidden mb-6">
-            <div className="p-4">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                Assets
-              </h2>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {assets.map((asset) => (
-                  <div
-                    key={asset.id}
-                    className="relative group cursor-pointer"
-                    onClick={() => handleEditAsset(asset)}
-                  >
+                  <div key={asset.id} className="relative group cursor-pointer">
                     <div className="aspect-square overflow-hidden rounded-lg">
                       <img
                         src={asset.imageUrl}
@@ -264,15 +249,35 @@ const AdminDashboard = () => {
                         <h3 className="text-lg font-semibold mb-3">
                           {asset.title}
                         </h3>
-                        <a
-                          href={asset.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors duration-200"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          View Project
-                        </a>
+                        <div className="flex flex-col space-y-2">
+                          <a
+                            href={asset.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors duration-200"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            View Project
+                          </a>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditAsset(asset);
+                            }}
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm text-white transition-colors duration-200"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteAsset(asset);
+                            }}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm text-white transition-colors duration-200"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -280,6 +285,110 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
+
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {editingAsset ? "Edit Asset" : "Create New Asset"}
+                  </h2>
+                  <button
+                    onClick={() => setIsModalOpen(false)}
+                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    <svg
+                      className="w-6 h-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <form onSubmit={handleAssetSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Title
+                    </label>
+                    <input
+                      type="text"
+                      value={assetForm.title}
+                      onChange={(e) =>
+                        setAssetForm({ ...assetForm, title: e.target.value })
+                      }
+                      required
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      value={assetForm.description}
+                      onChange={(e) =>
+                        setAssetForm({
+                          ...assetForm,
+                          description: e.target.value,
+                        })
+                      }
+                      required
+                      rows={3}
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      URL
+                    </label>
+                    <input
+                      type="url"
+                      value={assetForm.url}
+                      onChange={(e) =>
+                        setAssetForm({ ...assetForm, url: e.target.value })
+                      }
+                      required
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Image
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      required={!editingAsset}
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg dark:text-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800"
+                    >
+                      {editingAsset ? "Update Asset" : "Create Asset"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white dark:bg-gray-800 relative shadow-md sm:rounded-lg overflow-hidden">
             <div className="flex flex-col md:flex-row items-center justify-between space-y-3 md:space-y-0 md:space-x-4 p-4">
