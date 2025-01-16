@@ -1,5 +1,6 @@
 import { useAuth } from "../contexts/AuthContext";
 import { useState, useEffect, useRef } from "react";
+import PropTypes from "prop-types";
 import {
   collection,
   getDocs,
@@ -14,7 +15,7 @@ import {
 import { db } from "../config/firebase";
 import Navbar from "../components/Navbar";
 
-const ProjectCard = ({ asset, userData, onCommentClick }) => {
+const ProjectCard = ({ asset, userData, onCommentClick, selectedUser }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const imageUrls = asset.imageUrls || [asset.imageUrl]; // Fallback for old assets
@@ -31,59 +32,39 @@ const ProjectCard = ({ asset, userData, onCommentClick }) => {
     return () => clearInterval(interval);
   }, [imageUrls]);
 
-  // Check for unread messages
+  // Check for unread messages using only Firestore real-time updates
   useEffect(() => {
     if (!userData) return;
 
-    const checkUnreadMessages = async () => {
-      try {
-        const commentsRef = collection(db, "comments");
-        let q;
-
-        if (userData.role === "admin") {
-          // For admin, check if there are any unread messages from users
-          q = query(
-            commentsRef,
-            where("assetId", "==", asset.id),
-            where("userRole", "==", "user"),
-            where("isRead", "==", false)
-          );
-        } else {
-          // For users, check if there are any unread messages from admin
-          q = query(
-            commentsRef,
-            where("assetId", "==", asset.id),
-            where("userRole", "==", "admin"),
-            where("isRead", "==", false)
-          );
-        }
-
-        const snapshot = await getDocs(q);
-        setHasUnreadMessages(!snapshot.empty);
-      } catch (error) {
-        console.error("Error checking unread messages:", error);
-      }
-    };
-
-    checkUnreadMessages();
-
-    // Set up real-time listener for new messages
     const commentsRef = collection(db, "comments");
     let q;
 
     if (userData.role === "admin") {
-      q = query(
-        commentsRef,
+      // For admin, check if there are any unread messages from users
+      // Only filter by user if one is selected
+      const baseQuery = [
         where("assetId", "==", asset.id),
         where("userRole", "==", "user"),
-        where("isRead", "==", false)
-      );
+        where("isRead", "==", false),
+      ];
+
+      if (selectedUser) {
+        q = query(
+          commentsRef,
+          ...baseQuery,
+          where("userId", "!=", selectedUser.uid)
+        );
+      } else {
+        q = query(commentsRef, ...baseQuery);
+      }
     } else {
+      // For users, check if there are any unread messages from admin
       q = query(
         commentsRef,
         where("assetId", "==", asset.id),
         where("userRole", "==", "admin"),
-        where("isRead", "==", false)
+        where("isRead", "==", false),
+        where("recipientId", "==", userData.uid)
       );
     }
 
@@ -92,13 +73,9 @@ const ProjectCard = ({ asset, userData, onCommentClick }) => {
     });
 
     return () => unsubscribe();
-  }, [asset.id, userData]);
+  }, [asset.id, userData, selectedUser]);
 
-  const handleCommentClick = async () => {
-    // Only clear notification for regular users
-    if (userData.role !== "admin") {
-      setHasUnreadMessages(false);
-    }
+  const handleCommentClick = () => {
     onCommentClick(asset);
   };
 
@@ -156,6 +133,25 @@ const ProjectCard = ({ asset, userData, onCommentClick }) => {
       </div>
     </div>
   );
+};
+
+ProjectCard.propTypes = {
+  asset: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    title: PropTypes.string.isRequired,
+    description: PropTypes.string.isRequired,
+    url: PropTypes.string.isRequired,
+    imageUrls: PropTypes.arrayOf(PropTypes.string),
+    imageUrl: PropTypes.string,
+  }).isRequired,
+  userData: PropTypes.shape({
+    role: PropTypes.string.isRequired,
+    uid: PropTypes.string.isRequired,
+  }),
+  onCommentClick: PropTypes.func.isRequired,
+  selectedUser: PropTypes.shape({
+    uid: PropTypes.string.isRequired,
+  }),
 };
 
 const Landing = () => {
@@ -264,6 +260,7 @@ const Landing = () => {
           commentsRef,
           where("assetId", "==", assetId),
           where("userId", "in", [selectedUser.uid, "admin"]),
+          where("recipientId", "in", [selectedUser.uid, "admin"]),
           orderBy("createdAt", "asc")
         );
 
@@ -280,6 +277,7 @@ const Landing = () => {
         const q = query(
           commentsRef,
           where("assetId", "==", assetId),
+          where("recipientId", "in", [userData.uid, "admin"]),
           where("userId", "in", [userData.uid, "admin"]),
           orderBy("createdAt", "asc")
         );
@@ -308,7 +306,21 @@ const Landing = () => {
         await fetchComments(asset.id);
       }
     } else {
-      // For regular users, fetch comments immediately
+      // For regular users, mark all admin messages for this asset as read
+      const commentsRef = collection(db, "comments");
+      const q = query(
+        commentsRef,
+        where("assetId", "==", asset.id),
+        where("userRole", "==", "admin"),
+        where("recipientId", "==", userData.uid),
+        where("isRead", "==", false)
+      );
+      const batch = writeBatch(db);
+      const unreadSnapshot = await getDocs(q);
+      unreadSnapshot.docs.forEach((doc) => {
+        batch.update(doc.ref, { isRead: true });
+      });
+      await batch.commit();
       await fetchComments(asset.id);
     }
   };
@@ -316,7 +328,25 @@ const Landing = () => {
   // Add effect to fetch comments when selectedUser changes for admin
   useEffect(() => {
     if (userData?.role === "admin" && selectedUser && selectedAsset) {
+      const markMessagesAsRead = async () => {
+        // Mark all unread messages from this user as read
+        const commentsRef = collection(db, "comments");
+        const q = query(
+          commentsRef,
+          where("assetId", "==", selectedAsset.id),
+          where("userId", "==", selectedUser.uid),
+          where("isRead", "==", false)
+        );
+        const batch = writeBatch(db);
+        const unreadSnapshot = await getDocs(q);
+        unreadSnapshot.docs.forEach((doc) => {
+          batch.update(doc.ref, { isRead: true });
+        });
+        await batch.commit();
+      };
+
       fetchComments(selectedAsset.id);
+      markMessagesAsRead();
     }
   }, [selectedUser, selectedAsset]);
 
@@ -379,6 +409,7 @@ const Landing = () => {
                 asset={asset}
                 userData={userData}
                 onCommentClick={handleCommentClick}
+                selectedUser={selectedUser}
               />
             ))}
           </div>
@@ -405,6 +436,22 @@ const Landing = () => {
                         );
                         setSelectedUser(user);
                         if (user) {
+                          // Mark all unread messages from this user as read for all assets
+                          const markMessagesAsRead = async () => {
+                            const commentsRef = collection(db, "comments");
+                            const q = query(
+                              commentsRef,
+                              where("userId", "==", user.uid),
+                              where("isRead", "==", false)
+                            );
+                            const batch = writeBatch(db);
+                            const unreadSnapshot = await getDocs(q);
+                            unreadSnapshot.docs.forEach((doc) => {
+                              batch.update(doc.ref, { isRead: true });
+                            });
+                            await batch.commit();
+                          };
+                          markMessagesAsRead();
                           fetchComments(selectedAsset.id);
                         }
                       }}
