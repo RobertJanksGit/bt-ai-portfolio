@@ -19,7 +19,31 @@ const Landing = () => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
   const commentsEndRef = useRef(null);
+
+  // Fetch users for admin
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (userData?.role === "admin") {
+        try {
+          const usersRef = collection(db, "users");
+          const userSnapshot = await getDocs(usersRef);
+          const userList = userSnapshot.docs
+            .map((doc) => ({
+              uid: doc.id,
+              ...doc.data(),
+            }))
+            .filter((user) => user.role === "user"); // Only get regular users
+          setUsers(userList);
+        } catch (error) {
+          console.error("Error fetching users:", error);
+        }
+      }
+    };
+    fetchUsers();
+  }, [userData]);
 
   const scrollToBottom = () => {
     commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -56,25 +80,73 @@ const Landing = () => {
   const fetchComments = async (assetId) => {
     try {
       const commentsRef = collection(db, "comments");
-      const q = query(
-        commentsRef,
-        where("assetId", "==", assetId),
-        orderBy("createdAt", "asc")
-      );
-      const commentSnapshot = await getDocs(q);
-      const commentList = commentSnapshot.docs
-        .map((doc) => ({
+      let q;
+
+      if (userData?.role === "admin" && selectedUser) {
+        // Admin viewing specific user's conversation
+        q = query(
+          commentsRef,
+          where("assetId", "==", assetId),
+          where("userId", "in", [selectedUser.uid, userData.uid]),
+          orderBy("createdAt", "asc")
+        );
+      } else if (userData?.role === "user") {
+        // Regular user viewing their conversation with admin
+        q = query(
+          commentsRef,
+          where("assetId", "==", assetId),
+          where("userId", "in", [userData.uid]),
+          orderBy("createdAt", "asc")
+        );
+
+        // Get admin comments in a separate query
+        const adminQuery = query(
+          commentsRef,
+          where("assetId", "==", assetId),
+          where("userRole", "==", "admin"),
+          orderBy("createdAt", "asc")
+        );
+
+        // Fetch both user and admin comments
+        const [userSnapshot, adminSnapshot] = await Promise.all([
+          getDocs(q),
+          getDocs(adminQuery),
+        ]);
+
+        // Combine and sort all comments
+        const userComments = userSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
           createdAt: doc.data().createdAt?.toDate(),
-        }))
-        // Filter comments to only show user's own comments and admin comments
-        .filter(
-          (comment) =>
-            comment.userId === userData.uid ||
-            userData.role === "admin" ||
-            (comment.userRole === "admin" && userData.role === "user")
+        }));
+
+        const adminComments = adminSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+        }));
+
+        const allComments = [...userComments, ...adminComments].sort(
+          (a, b) => a.createdAt - b.createdAt
         );
+
+        setComments(allComments);
+        return;
+      } else {
+        // Default query if something goes wrong
+        q = query(
+          commentsRef,
+          where("assetId", "==", assetId),
+          orderBy("createdAt", "asc")
+        );
+      }
+
+      const commentSnapshot = await getDocs(q);
+      const commentList = commentSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate(),
+      }));
       setComments(commentList);
     } catch (error) {
       console.error("Error fetching comments:", error);
@@ -201,11 +273,44 @@ const Landing = () => {
           <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
             {/* Fixed Header */}
             <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Comments for {selectedAsset?.title}
-              </h2>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Comments for {selectedAsset?.title}
+                </h2>
+                {userData?.role === "admin" && (
+                  <div className="mt-2">
+                    <select
+                      value={selectedUser?.uid || ""}
+                      onChange={(e) => {
+                        const user = users.find(
+                          (u) => u.uid === e.target.value
+                        );
+                        setSelectedUser(user);
+                        if (user) {
+                          fetchComments(selectedAsset.id);
+                        }
+                      }}
+                      className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                      <option value="">
+                        Select a user to view conversation
+                      </option>
+                      {users.map((user) => (
+                        <option key={user.uid} value={user.uid}>
+                          {user.name || user.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  if (userData?.role === "admin") {
+                    setSelectedUser(null);
+                  }
+                }}
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
                 <svg
@@ -226,73 +331,80 @@ const Landing = () => {
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6">
-              {/* Comments List */}
-              <div className="space-y-4 mb-4">
-                {comments.map((comment) => (
-                  <div
-                    key={comment.id}
-                    className={`p-4 rounded-lg ${
-                      comment.userId === userData.uid
-                        ? "bg-blue-50 dark:bg-blue-900/30 ml-8"
-                        : "bg-gray-50 dark:bg-gray-700/50 mr-8"
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <span className="font-semibold text-gray-900 dark:text-white">
-                          {comment.userName}
-                        </span>
-                        <span
-                          className={`ml-2 text-xs px-2 py-1 rounded ${
-                            comment.userRole === "admin"
-                              ? "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300"
-                              : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
-                          }`}
-                        >
-                          {comment.userRole}
+              {userData?.role === "admin" && !selectedUser ? (
+                <div className="text-center text-gray-600 dark:text-gray-400">
+                  Please select a user to view their conversation
+                </div>
+              ) : (
+                <div className="space-y-4 mb-4">
+                  {comments.map((comment) => (
+                    <div
+                      key={comment.id}
+                      className={`p-4 rounded-lg ${
+                        comment.userId === userData.uid
+                          ? "bg-blue-50 dark:bg-blue-900/30 ml-8"
+                          : "bg-gray-50 dark:bg-gray-700/50 mr-8"
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {comment.userName}
+                          </span>
+                          <span
+                            className={`ml-2 text-xs px-2 py-1 rounded ${
+                              comment.userRole === "admin"
+                                ? "bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300"
+                                : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+                            }`}
+                          >
+                            {comment.userRole}
+                          </span>
+                        </div>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {comment.createdAt?.toLocaleString()}
                         </span>
                       </div>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {comment.createdAt?.toLocaleString()}
-                      </span>
+                      <p className="text-gray-700 dark:text-gray-300">
+                        {comment.content}
+                      </p>
                     </div>
-                    <p className="text-gray-700 dark:text-gray-300">
-                      {comment.content}
-                    </p>
-                  </div>
-                ))}
-                <div ref={commentsEndRef} />
-              </div>
+                  ))}
+                  <div ref={commentsEndRef} />
+                </div>
+              )}
             </div>
 
             {/* Fixed Footer with Comment Form */}
             <div className="border-t border-gray-200 dark:border-gray-700 p-6">
-              <form onSubmit={handleSubmitComment}>
-                <textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (newComment.trim()) {
-                        handleSubmitComment(e);
+              {(userData?.role !== "admin" || selectedUser) && (
+                <form onSubmit={handleSubmitComment}>
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (newComment.trim()) {
+                          handleSubmitComment(e);
+                        }
                       }
-                    }
-                  }}
-                  placeholder="Write your comment... (Press Enter to send, Shift + Enter for new line)"
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  rows="3"
-                />
-                <div className="flex justify-end mt-2">
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    disabled={!newComment.trim()}
-                  >
-                    Send Comment
-                  </button>
-                </div>
-              </form>
+                    }}
+                    placeholder="Write your comment... (Press Enter to send, Shift + Enter for new line)"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    rows="3"
+                  />
+                  <div className="flex justify-end mt-2">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      disabled={!newComment.trim()}
+                    >
+                      Send Comment
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>
