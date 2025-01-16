@@ -14,6 +14,7 @@ import Navbar from "../components/Navbar";
 
 const ProjectCard = ({ asset, userData, onCommentClick }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const imageUrls = asset.imageUrls || [asset.imageUrl]; // Fallback for old assets
 
   useEffect(() => {
@@ -27,6 +28,43 @@ const ProjectCard = ({ asset, userData, onCommentClick }) => {
 
     return () => clearInterval(interval);
   }, [imageUrls]);
+
+  // Check for unread messages
+  useEffect(() => {
+    if (!userData) return;
+
+    const checkUnreadMessages = async () => {
+      try {
+        const commentsRef = collection(db, "comments");
+        let q;
+
+        if (userData.role === "admin") {
+          // For admin, check if there are any unread messages from users
+          q = query(
+            commentsRef,
+            where("assetId", "==", asset.id),
+            where("userRole", "==", "user"),
+            where("isRead", "==", false)
+          );
+        } else {
+          // For users, check if there are any unread messages from admin
+          q = query(
+            commentsRef,
+            where("assetId", "==", asset.id),
+            where("userRole", "==", "admin"),
+            where("isRead", "==", false)
+          );
+        }
+
+        const snapshot = await getDocs(q);
+        setHasUnreadMessages(!snapshot.empty);
+      } catch (error) {
+        console.error("Error checking unread messages:", error);
+      }
+    };
+
+    checkUnreadMessages();
+  }, [asset.id, userData]);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-lg transition-transform hover:scale-105">
@@ -54,24 +92,29 @@ const ProjectCard = ({ asset, userData, onCommentClick }) => {
             View Project
           </a>
           {userData && (
-            <button
-              onClick={() => onCommentClick(asset)}
-              className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <div className="relative">
+              <button
+                onClick={() => onCommentClick(asset)}
+                className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
-            </button>
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                  />
+                </svg>
+              </button>
+              {hasUnreadMessages && (
+                <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse"></span>
+              )}
+            </div>
           )}
         </div>
       </div>
