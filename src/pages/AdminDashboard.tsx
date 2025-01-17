@@ -26,6 +26,7 @@ interface Asset {
   url: string;
   imageUrls: string[];
   createdAt: Date;
+  isWorkInProgress: boolean;
 }
 
 const AssetCard = ({
@@ -60,20 +61,27 @@ const AssetCard = ({
           className="w-full h-full object-cover transition-all duration-500"
           style={{ opacity: 1 }}
         />
+        {asset.isWorkInProgress && (
+          <div className="absolute top-2 right-2 bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-medium">
+            Work in Progress
+          </div>
+        )}
       </div>
       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-75 transition-opacity duration-300 rounded-lg flex items-center justify-center">
         <div className="opacity-0 group-hover:opacity-100 text-white p-4 text-center">
           <h3 className="text-lg font-semibold mb-3">{asset.title}</h3>
           <div className="flex flex-col space-y-2">
-            <a
-              href={asset.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-              View Project
-            </a>
+            {!asset.isWorkInProgress && (
+              <a
+                href={asset.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white transition-colors duration-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                View Project
+              </a>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -111,6 +119,7 @@ const AdminDashboard = () => {
     url: "",
     images: [] as File[],
     existingImages: [] as string[],
+    isWorkInProgress: false,
   });
 
   useEffect(() => {
@@ -209,6 +218,7 @@ const AdminDashboard = () => {
         description: assetForm.description,
         url: assetForm.url,
         imageUrls,
+        isWorkInProgress: assetForm.isWorkInProgress,
         updatedAt: new Date(),
       };
 
@@ -249,6 +259,7 @@ const AdminDashboard = () => {
         url: "",
         images: [],
         existingImages: [],
+        isWorkInProgress: false,
       });
       setEditingAsset(null);
       setIsModalOpen(false);
@@ -273,6 +284,7 @@ const AdminDashboard = () => {
       url: asset.url,
       images: [],
       existingImages: asset.imageUrls || [],
+      isWorkInProgress: asset.isWorkInProgress || false,
     });
     setIsModalOpen(true);
   };
@@ -312,6 +324,7 @@ const AdminDashboard = () => {
       url: "",
       images: [],
       existingImages: [],
+      isWorkInProgress: false,
     });
     setIsModalOpen(true);
   };
@@ -433,6 +446,26 @@ const AdminDashboard = () => {
                       required
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                     />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isWorkInProgress"
+                      checked={assetForm.isWorkInProgress}
+                      onChange={(e) =>
+                        setAssetForm({
+                          ...assetForm,
+                          isWorkInProgress: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:focus:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                    <label
+                      htmlFor="isWorkInProgress"
+                      className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300"
+                    >
+                      Work in Progress
+                    </label>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

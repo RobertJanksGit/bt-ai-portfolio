@@ -85,27 +85,36 @@ const ProjectCard = ({ asset, userData, onCommentClick, selectedUser }) => {
         <img
           src={imageUrls[currentImageIndex]}
           alt={asset.title}
-          className="w-full h-48 object-cover transition-all duration-500"
+          className="w-full h-72 object-cover transition-all duration-500"
         />
+        {asset.isWorkInProgress && (
+          <div className="absolute top-2 right-2 bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-medium">
+            Work in Progress
+          </div>
+        )}
       </div>
       <div className="p-4">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2 truncate">
           {asset.title}
         </h3>
-        <p className="text-gray-600 dark:text-gray-300 mb-4">
+        <p className="text-gray-600 dark:text-gray-300 mb-4 whitespace-pre-wrap">
           {asset.description}
         </p>
         <div className="flex justify-between items-center">
-          <a
-            href={asset.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            View Project
-          </a>
+          {!asset.isWorkInProgress && (
+            <a
+              href={asset.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              View Project
+            </a>
+          )}
           {userData && (
-            <div className="relative">
+            <div
+              className={`relative ${!asset.isWorkInProgress ? "" : "ml-auto"}`}
+            >
               <button
                 onClick={handleCommentClick}
                 className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
@@ -143,6 +152,7 @@ ProjectCard.propTypes = {
     url: PropTypes.string.isRequired,
     imageUrls: PropTypes.arrayOf(PropTypes.string),
     imageUrl: PropTypes.string,
+    isWorkInProgress: PropTypes.bool,
   }).isRequired,
   userData: PropTypes.shape({
     role: PropTypes.string.isRequired,
