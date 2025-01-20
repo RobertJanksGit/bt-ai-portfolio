@@ -20,7 +20,7 @@ const Login = () => {
       setError("");
       setLoading(true);
       await login(formData.email, formData.password);
-      navigate("/dashboard");
+      navigate("/");
     } catch (error) {
       setError(
         error.code === "auth/wrong-password"

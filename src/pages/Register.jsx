@@ -28,7 +28,7 @@ const Register = () => {
       setError("");
       setLoading(true);
       await register(formData.email, formData.password, formData.name);
-      navigate("/dashboard");
+      navigate("/");
     } catch (error) {
       setError(
         error.code === "auth/email-already-in-use"
