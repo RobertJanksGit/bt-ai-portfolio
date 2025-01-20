@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 import Navbar from "../components/Navbar";
+import { Link } from "react-router-dom";
 
 const ProjectCard = ({ asset, userData, onCommentClick, selectedUser }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -137,10 +138,10 @@ const ProjectCard = ({ asset, userData, onCommentClick, selectedUser }) => {
               </a>
             )}
           </div>
-          {userData && (
-            <div
-              className={`relative ${!asset.isWorkInProgress ? "" : "ml-auto"}`}
-            >
+          <div
+            className={`relative ${!asset.isWorkInProgress ? "" : "ml-auto"}`}
+          >
+            {userData ? (
               <button
                 onClick={handleCommentClick}
                 className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
@@ -159,11 +160,38 @@ const ProjectCard = ({ asset, userData, onCommentClick, selectedUser }) => {
                   />
                 </svg>
               </button>
-              {hasUnreadMessages && (
-                <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse"></span>
-              )}
-            </div>
-          )}
+            ) : (
+              <div className="relative group">
+                <Link
+                  to="/login"
+                  className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                </Link>
+                <div className="absolute z-50 -top-10 right-0 hidden group-hover:block">
+                  <div className="bg-black text-white text-xs rounded py-1.5 px-3 whitespace-nowrap">
+                    Login to comment
+                    <div className="absolute w-2 h-2 bg-black transform rotate-45 translate-y-[2px] right-[10px]"></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {hasUnreadMessages && (
+              <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse"></span>
+            )}
+          </div>
         </div>
       </div>
     </div>
