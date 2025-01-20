@@ -116,7 +116,7 @@ const ProjectCard = ({ asset, userData, onCommentClick, selectedUser }) => {
         )}
         <div className="flex justify-between items-center">
           <div className="flex gap-2">
-            {!asset.isWorkInProgress && (
+            {!asset.isWorkInProgress && asset.url && (
               <a
                 href={asset.url}
                 target="_blank"
@@ -175,7 +175,7 @@ ProjectCard.propTypes = {
     id: PropTypes.string.isRequired,
     title: PropTypes.string.isRequired,
     description: PropTypes.string.isRequired,
-    url: PropTypes.string.isRequired,
+    url: PropTypes.string,
     githubUrl: PropTypes.string,
     imageUrls: PropTypes.arrayOf(PropTypes.string),
     imageUrl: PropTypes.string,

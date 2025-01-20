@@ -23,7 +23,7 @@ interface Asset {
   id: string;
   title: string;
   description: string;
-  url: string;
+  url?: string;
   githubUrl?: string;
   imageUrls: string[];
   createdAt: Date;
@@ -303,7 +303,7 @@ const AdminDashboard = () => {
     setAssetForm({
       title: asset.title,
       description: asset.description,
-      url: asset.url,
+      url: asset.url || "",
       githubUrl: asset.githubUrl || "",
       images: [],
       existingImages: asset.imageUrls || [],
@@ -469,8 +469,8 @@ const AdminDashboard = () => {
                       onChange={(e) =>
                         setAssetForm({ ...assetForm, url: e.target.value })
                       }
-                      required
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                      placeholder="Live project URL (optional)"
                     />
                   </div>
                   <div>
@@ -513,19 +513,65 @@ const AdminDashboard = () => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Tech Stack
                     </label>
-                    <input
-                      type="text"
-                      value={assetForm.techStack.join(", ")}
-                      onChange={(e) =>
-                        setAssetForm({
-                          ...assetForm,
-                          techStack: e.target.value
-                            .split(", ")
-                            .map((s) => s.trim()),
-                        })
-                      }
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                    />
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Add technology..."
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const input = e.target as HTMLInputElement;
+                              const tech = input.value.trim();
+                              if (tech && !assetForm.techStack.includes(tech)) {
+                                setAssetForm({
+                                  ...assetForm,
+                                  techStack: [...assetForm.techStack, tech],
+                                });
+                                input.value = "";
+                              }
+                            }
+                          }}
+                          className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {assetForm.techStack.map((tech, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 rounded-full text-sm"
+                          >
+                            {tech}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAssetForm({
+                                  ...assetForm,
+                                  techStack: assetForm.techStack.filter(
+                                    (_, i) => i !== index
+                                  ),
+                                });
+                              }}
+                              className="hover:text-red-600 dark:hover:text-red-400 focus:outline-none"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
