@@ -100,6 +100,20 @@ const ProjectCard = ({ asset, userData, onCommentClick, selectedUser }) => {
         <p className="text-gray-600 dark:text-gray-300 mb-4 whitespace-pre-wrap">
           {asset.description}
         </p>
+        {asset.techStack && asset.techStack.length > 0 && (
+          <div className="mb-4">
+            <div className="flex flex-wrap gap-1">
+              {asset.techStack.map((tech, index) => (
+                <span
+                  key={index}
+                  className="inline-block bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 px-2 py-1 rounded-md text-xs"
+                >
+                  {tech}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex justify-between items-center">
           {!asset.isWorkInProgress && (
             <a
@@ -153,6 +167,7 @@ ProjectCard.propTypes = {
     imageUrls: PropTypes.arrayOf(PropTypes.string),
     imageUrl: PropTypes.string,
     isWorkInProgress: PropTypes.bool,
+    techStack: PropTypes.arrayOf(PropTypes.string),
   }).isRequired,
   userData: PropTypes.shape({
     role: PropTypes.string.isRequired,

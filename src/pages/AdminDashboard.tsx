@@ -27,6 +27,7 @@ interface Asset {
   imageUrls: string[];
   createdAt: Date;
   isWorkInProgress: boolean;
+  techStack?: string[];
 }
 
 const AssetCard = ({
@@ -47,7 +48,7 @@ const AssetCard = ({
       setCurrentImageIndex((prevIndex) =>
         prevIndex === asset.imageUrls.length - 1 ? 0 : prevIndex + 1
       );
-    }, 5000); // Change image every 5 seconds
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [asset.imageUrls]);
@@ -69,7 +70,21 @@ const AssetCard = ({
       </div>
       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-75 transition-opacity duration-300 rounded-lg flex items-center justify-center">
         <div className="opacity-0 group-hover:opacity-100 text-white p-4 text-center">
-          <h3 className="text-lg font-semibold mb-3">{asset.title}</h3>
+          <h3 className="text-lg font-semibold mb-2">{asset.title}</h3>
+          {asset.techStack && asset.techStack.length > 0 && (
+            <div className="mb-3">
+              <div className="flex flex-wrap gap-1 justify-center">
+                {asset.techStack.map((tech, index) => (
+                  <span
+                    key={index}
+                    className="inline-block bg-blue-600 px-2 py-1 rounded-md text-xs"
+                  >
+                    {tech}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex flex-col space-y-2">
             {!asset.isWorkInProgress && (
               <a
@@ -120,6 +135,7 @@ const AdminDashboard = () => {
     images: [] as File[],
     existingImages: [] as string[],
     isWorkInProgress: false,
+    techStack: [] as string[],
   });
 
   useEffect(() => {
@@ -219,6 +235,7 @@ const AdminDashboard = () => {
         url: assetForm.url,
         imageUrls,
         isWorkInProgress: assetForm.isWorkInProgress,
+        techStack: assetForm.techStack,
         updatedAt: new Date(),
       };
 
@@ -260,6 +277,7 @@ const AdminDashboard = () => {
         images: [],
         existingImages: [],
         isWorkInProgress: false,
+        techStack: [],
       });
       setEditingAsset(null);
       setIsModalOpen(false);
@@ -285,6 +303,7 @@ const AdminDashboard = () => {
       images: [],
       existingImages: asset.imageUrls || [],
       isWorkInProgress: asset.isWorkInProgress || false,
+      techStack: asset.techStack || [],
     });
     setIsModalOpen(true);
   };
@@ -325,6 +344,7 @@ const AdminDashboard = () => {
       images: [],
       existingImages: [],
       isWorkInProgress: false,
+      techStack: [],
     });
     setIsModalOpen(true);
   };
@@ -466,6 +486,24 @@ const AdminDashboard = () => {
                     >
                       Work in Progress
                     </label>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Tech Stack
+                    </label>
+                    <input
+                      type="text"
+                      value={assetForm.techStack.join(", ")}
+                      onChange={(e) =>
+                        setAssetForm({
+                          ...assetForm,
+                          techStack: e.target.value
+                            .split(", ")
+                            .map((s) => s.trim()),
+                        })
+                      }
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
