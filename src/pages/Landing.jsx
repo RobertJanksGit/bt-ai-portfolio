@@ -115,16 +115,28 @@ const ProjectCard = ({ asset, userData, onCommentClick, selectedUser }) => {
           </div>
         )}
         <div className="flex justify-between items-center">
-          {!asset.isWorkInProgress && (
-            <a
-              href={asset.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              View Project
-            </a>
-          )}
+          <div className="flex gap-2">
+            {!asset.isWorkInProgress && (
+              <a
+                href={asset.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors duration-200"
+              >
+                Live Demo
+              </a>
+            )}
+            {asset.githubUrl && (
+              <a
+                href={asset.githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm transition-colors duration-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+              >
+                GitHub
+              </a>
+            )}
+          </div>
           {userData && (
             <div
               className={`relative ${!asset.isWorkInProgress ? "" : "ml-auto"}`}
@@ -164,6 +176,7 @@ ProjectCard.propTypes = {
     title: PropTypes.string.isRequired,
     description: PropTypes.string.isRequired,
     url: PropTypes.string.isRequired,
+    githubUrl: PropTypes.string,
     imageUrls: PropTypes.arrayOf(PropTypes.string),
     imageUrl: PropTypes.string,
     isWorkInProgress: PropTypes.bool,

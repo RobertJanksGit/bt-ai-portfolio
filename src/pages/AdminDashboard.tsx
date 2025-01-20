@@ -24,6 +24,7 @@ interface Asset {
   title: string;
   description: string;
   url: string;
+  githubUrl?: string;
   imageUrls: string[];
   createdAt: Date;
   isWorkInProgress: boolean;
@@ -132,6 +133,7 @@ const AdminDashboard = () => {
     title: "",
     description: "",
     url: "",
+    githubUrl: "",
     images: [] as File[],
     existingImages: [] as string[],
     isWorkInProgress: false,
@@ -233,6 +235,7 @@ const AdminDashboard = () => {
         title: assetForm.title,
         description: assetForm.description,
         url: assetForm.url,
+        githubUrl: assetForm.githubUrl,
         imageUrls,
         isWorkInProgress: assetForm.isWorkInProgress,
         techStack: assetForm.techStack,
@@ -274,6 +277,7 @@ const AdminDashboard = () => {
         title: "",
         description: "",
         url: "",
+        githubUrl: "",
         images: [],
         existingImages: [],
         isWorkInProgress: false,
@@ -300,6 +304,7 @@ const AdminDashboard = () => {
       title: asset.title,
       description: asset.description,
       url: asset.url,
+      githubUrl: asset.githubUrl || "",
       images: [],
       existingImages: asset.imageUrls || [],
       isWorkInProgress: asset.isWorkInProgress || false,
@@ -341,6 +346,7 @@ const AdminDashboard = () => {
       title: "",
       description: "",
       url: "",
+      githubUrl: "",
       images: [],
       existingImages: [],
       isWorkInProgress: false,
@@ -464,6 +470,22 @@ const AdminDashboard = () => {
                         setAssetForm({ ...assetForm, url: e.target.value })
                       }
                       required
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      GitHub URL
+                    </label>
+                    <input
+                      type="url"
+                      value={assetForm.githubUrl}
+                      onChange={(e) =>
+                        setAssetForm({
+                          ...assetForm,
+                          githubUrl: e.target.value,
+                        })
+                      }
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                     />
                   </div>
